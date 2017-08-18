@@ -30,3 +30,7 @@
 *.exe
 *.out
 *.app
+
+*.td
+play.cc
+new.ogg
