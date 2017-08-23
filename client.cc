@@ -141,7 +141,7 @@ void server_interaction(Music &music, SafeQueue<string> &Q) {
 		} else if(result == "song") {
 			string newsong = song;
 			cout << "new song added " << newsong << endl;
-			Q.enqueue(newmusic);
+			Q.enqueue(newsong);
 		}else {
 			cout << "Don't know what to do :D" << endl;
 		}
