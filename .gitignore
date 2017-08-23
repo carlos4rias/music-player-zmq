@@ -34,3 +34,5 @@
 *.td
 play.cc
 new.ogg
+client
+server

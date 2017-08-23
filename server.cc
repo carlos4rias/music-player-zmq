@@ -43,7 +43,6 @@ void getSongsList(unordered_map<string, string> &songs, const string& pattern){
   globfree(&glob_result);
 }
 
-
 int main(int argc, char** argv) {
   context ctx;
   socket s(ctx, socket_type::rep);
@@ -62,28 +61,43 @@ int main(int argc, char** argv) {
     m >> op;
 
     cout << "Action:  " << op << endl;
-    if (op == "list") {  // Use case 1: Send the songs
+    if (op == "list") {
       message n;
       n << "list" << songs.size();
       for(const auto& p : songs)
         n << p.first;
       s.send(n);
-    } else if(op == "play") {
-      // Use case 2: Send song file
+    } else if (op == "song") {
       string songName;
       m >> songName;
       cout << "sending song " << songName
            << " at " << songs[songName] << endl;
 			message n;
 			n << "file";
-			cout << songs.count(songName) << endl;
 			fileToMesage(songs[songName], n);
 			s.send(n);
-    } else {
+    }  else if (op == "play") {
+			string songName;
+			m >> songName;
+			message n;
+			if (songs.count(songName))
+				n << "song";
+ 			else
+				n << "error";
+			s.send(n);
+		} else {
       cout << "Invalid operation requested!!\n";
     }
   }
-
   cout << "Finished\n";
   return 0;
 }
+
+/*
+Async message passing
+client message:
+	id#descarga#s.ogg
+server will send many messages with the parts
+changing the sockets type rep by xrep and req by xreq
+
+*/

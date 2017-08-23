@@ -8,7 +8,7 @@ LIBS=-lzmq -lzmqpp
 all: client server
 
 client: client.cc
-	$(CC) -L$(ZMQ_LIB) -I$(ZMQ_INC) client.cc -o client $(LIBS) -lsfml-audio -Wall
+	$(CC) -L$(ZMQ_LIB) -I$(ZMQ_INC) client.cc -o client $(LIBS) -lsfml-audio -Wall -pthread
 
 server: server.cc
 	$(CC) -L$(ZMQ_LIB) -I$(ZMQ_INC) server.cc -o server $(LIBS) -Wall
