@@ -10,26 +10,26 @@ using namespace std;
 using namespace zmqpp;
 
 vector<char> readFileToBytes(const string& fileName) {
-	ifstream ifs(fileName, ios::binary | ios::ate);
-	ifstream::pos_type pos = ifs.tellg();
+  ifstream ifs(fileName, ios::binary | ios::ate);
+  ifstream::pos_type pos = ifs.tellg();
 
-	vector<char> result(pos);
+  vector<char> result(pos);
 
-	ifs.seekg(0, ios::beg);
-	ifs.read(result.data(), pos);
+  ifs.seekg(0, ios::beg);
+  ifs.read(result.data(), pos);
 
-	return result;
+  return result;
 }
 
 void fileToMesage(const string& fileName, message& msg) {
-	vector<char> bytes = readFileToBytes(fileName);
-	msg.add_raw(bytes.data(), bytes.size());
+  vector<char> bytes = readFileToBytes(fileName);
+  msg.add_raw(bytes.data(), bytes.size());
 }
 
 string get_song_name(const string &name ) {
-	string cname = name.substr(name.find("/", 2) + 1);
-	int sz = (int)cname.size();
-	return cname.substr(0, sz - 4);
+  string cname = name.substr(name.find("/", 2) + 1);
+  int sz = (int)cname.size();
+  return cname.substr(0, sz - 4);
 }
 
 void getSongsList(unordered_map<string, string> &songs, const string& pattern){
@@ -37,8 +37,8 @@ void getSongsList(unordered_map<string, string> &songs, const string& pattern){
   glob(pattern.c_str(), GLOB_TILDE,NULL, &glob_result);
 
   for(unsigned int i = 0; i < glob_result.gl_pathc; ++i){
-		string sname = get_song_name(glob_result.gl_pathv[i]);
-		songs[sname] = string(glob_result.gl_pathv[i]);
+    string sname = get_song_name(glob_result.gl_pathv[i]);
+    songs[sname] = string(glob_result.gl_pathv[i]);
   }
   globfree(&glob_result);
 }
@@ -50,7 +50,7 @@ int main(int argc, char** argv) {
 
   string path(argv[1]);
   unordered_map<string,string> songs;
-	getSongsList(songs, path + "/*.ogg");
+  getSongsList(songs, path + "/*.ogg");
 
   cout << "Start serving requests!\n";
   while(true) {
@@ -72,22 +72,24 @@ int main(int argc, char** argv) {
       m >> songName;
       cout << "sending song " << songName
            << " at " << songs[songName] << endl;
-			message n;
-			n << "file";
-			fileToMesage(songs[songName], n);
-			s.send(n);
-    }  else if (op == "play") {
-			string songName;
-			m >> songName;
-			message n;
-			if (songs.count(songName))
-				n << "song";
- 			else
-				n << "error";
-			s.send(n);
-		} else {
-      cout << "Invalid operation requested!!\n";
-    }
+      message n;
+      n << "file";
+      fileToMesage(songs[songName], n);
+      s.send(n);
+        }  else if (op == "play") {
+      string songName;
+      m >> songName;
+
+      message n;
+      if (songs.count(songName))
+        n << "song";
+     	else
+        n << "error";
+      
+      s.send(n);
+      } else {
+        cout << "Invalid operation requested!!\n";
+      }
   }
   cout << "Finished\n";
   return 0;
@@ -96,8 +98,9 @@ int main(int argc, char** argv) {
 /*
 Async message passing
 client message:
-	id#descarga#s.ogg
+  id#descarga#s.ogg
 server will send many messages with the parts
+
 changing the sockets type rep by xrep and req by xreq
 
 */
