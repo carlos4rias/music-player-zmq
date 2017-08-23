@@ -1,7 +1,11 @@
 #include <iostream>
 #include <string>
 #include <fstream>
-#include <deque>
+#include <queue>
+#include <thread>
+
+#include <mutex>
+#include <condition_variable>
 
 #include <SFML/Audio.hpp>
 #include <zmqpp/zmqpp.hpp>
@@ -9,6 +13,57 @@
 using namespace std;
 using namespace zmqpp;
 using namespace sf;
+
+#ifndef SAFE_QUEUE
+#define SAFE_QUEUE
+
+// A threadsafe-queue.
+template <class T>
+class SafeQueue {
+public:
+  SafeQueue(void)
+    : q()
+    , m()
+    , c()
+  {}
+
+  ~SafeQueue(void)
+  {}
+
+  // Add an element to the queue.
+  void enqueue(T t) {
+    std::lock_guard<std::mutex> lock(m);
+    q.push(t);
+    c.notify_one();
+  }
+
+	int size() {
+		return  q.size();
+	}
+
+	bool empty() {
+		return q.empty();
+	}
+
+  // Get the "front"-element.
+  // If the queue is empty, wait till a element is avaiable.
+  T dequeue(void) {
+    std::unique_lock<std::mutex> lock(m);
+    while(q.empty()) {
+      // release lock as long as the wait and reaquire it afterwards.
+      c.wait(lock);
+    }
+    T val = q.front();
+    q.pop();
+    return val;
+  }
+
+private:
+  std::queue<T> q;
+  mutable std::mutex m;
+  std::condition_variable c;
+};
+#endif
 
 void messageToFile(const message & msg, const string &fileName) {
 	const void *data;
@@ -20,35 +75,59 @@ void messageToFile(const message & msg, const string &fileName) {
 	return;
 }
 
-int main(int argc, char** argv) {
-	cout << "This is the client!!\n";
+void music_queue(Music &music, SafeQueue<string> &Q) {
+  context ctx;
+  socket s(ctx, socket_type::req);
+  // cout << "Connecting to tcp port 5555\n";
+  s.connect("tcp://localhost:5555");
 
-	context ctx;
-	socket s(ctx, socket_type::req);
-
-	sf::Music music;
-
-	cout << "Connecting to tcp port 5555\n";
-	s.connect("tcp://localhost:5555");
-
-	cout << "Sending  some work!\n";
 	while (true) {
-		message m;
-		string operation, song; cin >> operation;
-		m << operation;
-		if (operation == "play") {
+		string songName = Q.dequeue(), state;
+    message m, answer;
+    m << "song";
+    m << songName;
+    s.send(m);
+    s.receive(answer);
+    answer >> state;
+    if (state == "file") {
+      messageToFile(answer, songName + ".ogg");
+      music.openFromFile(songName + ".ogg");
+      music.play();
+      cout << "playing: " << songName << endl;
+      while (music.getStatus() == SoundSource::Playing) {}
+    } else {
+      cout << "Didn't get a valid file" << endl;
+    }
+
+	}
+}
+
+void server_interaction(Music &music, SafeQueue<string> &Q) {
+  context ctx;
+  socket s(ctx, socket_type::req);
+  // cout << "Connecting to tcp port 5555\n";
+  s.connect("tcp://localhost:5555");
+
+  while (true) {
+		message m, answer;
+		string operation, song, result;
+
+    cin >> operation;
+
+    if (operation == "next") {
+      music.stop();
+      continue;
+    }
+
+    m << operation;
+    if (operation == "play") {
 			cin >> song;
 			m << song;
 		}
 
 		s.send(m);
-
-
-
-		message answer;
 		s.receive(answer);
 
-		string result;
 		answer >> result;
 		if (result == "list") {
 			size_t numSongs;
@@ -59,22 +138,24 @@ int main(int argc, char** argv) {
 				answer >> s;
 				cout << s << endl;
 			}
-
-		} else if(result == "file") {
-			string newmusic = "new.ogg";
-			messageToFile(answer, newmusic);
-			music.openFromFile(newmusic);
-			music.play();
-
-			while (music.getStatus() == SoundSource::Playing) {
-				cout << "is playing" << endl;
-			}
-
+		} else if(result == "song") {
+			string newsong = song;
+			cout << "new song added " << newsong << endl;
+			Q.enqueue(newmusic);
 		}else {
 			cout << "Don't know what to do :D" << endl;
 		}
-
 	}
+}
+
+int main(int argc, char** argv) {
+	Music music;
+	SafeQueue<string> Q;
+
+	thread interact(&server_interaction, ref(music), ref(Q));
+	thread playlist(&music_queue, ref(music), ref(Q));
+	interact.join();
+	playlist.join();
 	return 0;
 }
 
