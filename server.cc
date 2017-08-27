@@ -5,24 +5,36 @@
 #include <unordered_map>
 #include <fstream>
 #include <glob.h>
+#include <cmath>
 
 using namespace std;
 using namespace zmqpp;
 
-vector<char> readFileToBytes(const string& fileName) {
+int get_file_parts(const string& fileName, int chunk = 512) {
   ifstream ifs(fileName, ios::binary | ios::ate);
   ifstream::pos_type pos = ifs.tellg();
+  return ceil((double)pos / (chunk * 1024));
+}
 
-  vector<char> result(pos);
+vector<char> readFileToBytes(const string& fileName, int part, int chunk, int hw) {
+  ifstream ifs(fileName, ios::binary | ios::ate);
+  int tsz = ifs.tellg();
+  int kb = 1024;
 
-  ifs.seekg(0, ios::beg);
-  ifs.read(result.data(), pos);
+  ifs.seekg(part * kb * chunk, ifs.beg);
+  vector<char> result;
+  if (part + 1 == hw) {
+    result.resize(tsz - kb * part * chunk);
+  }else {
+    result.resize(chunk * kb);
+  }
+  ifs.read(result.data(), chunk * kb);
 
   return result;
 }
 
-void fileToMesage(const string& fileName, message& msg) {
-  vector<char> bytes = readFileToBytes(fileName);
+void fileToMesage(const string& fileName, message& msg, int part, int hw) {
+  vector<char> bytes = readFileToBytes(fileName, part, 512, hw);
   msg.add_raw(bytes.data(), bytes.size());
 }
 
@@ -67,25 +79,38 @@ int main(int argc, char** argv) {
       for(const auto& p : songs)
         n << p.first;
       s.send(n);
-    } else if (op == "song") {
+    } else if (op == "init_song") {
       string songName;
-      m >> songName;
+      int part, hw;
+      m >> songName >> part >> hw;
       cout << "sending song " << songName
-           << " at " << songs[songName] << endl;
+           << " at " << songs[songName] << " part :" << part << endl;
       message n;
-      n << "file";
-      fileToMesage(songs[songName], n);
+      n << "init";
+      fileToMesage(songs[songName], n, part, hw);
       s.send(n);
-        }  else if (op == "play") {
+    } else if (op == "get_part") {
+      string songName;
+      int part, hw;
+      m >> songName >> part >> hw;
+      cout << "sending song " << songName
+           << " at " << songs[songName] << " part :" << part << endl;
+      message n;
+      n << "chunk";
+      fileToMesage(songs[songName], n, part, hw);
+      s.send(n);
+    } else if (op == "play") {
       string songName;
       m >> songName;
 
       message n;
-      if (songs.count(songName))
+      if (songs.count(songName)) {
         n << "song";
-     	else
+        n << get_file_parts(songs[songName]);
+      } else {
         n << "error";
-      
+      }
+
       s.send(n);
       } else {
         cout << "Invalid operation requested!!\n";
@@ -94,13 +119,3 @@ int main(int argc, char** argv) {
   cout << "Finished\n";
   return 0;
 }
-
-/*
-Async message passing
-client message:
-  id#descarga#s.ogg
-server will send many messages with the parts
-
-changing the sockets type rep by xrep and req by xreq
-
-*/

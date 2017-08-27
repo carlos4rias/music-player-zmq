@@ -36,3 +36,5 @@ play.cc
 new.ogg
 client
 server
+play
+play_by_chunks.cc

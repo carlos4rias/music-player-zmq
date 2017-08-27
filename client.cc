@@ -3,6 +3,7 @@
 #include <fstream>
 #include <queue>
 #include <thread>
+#include <stdlib.h>
 
 #include <mutex>
 #include <condition_variable>
@@ -13,6 +14,17 @@
 using namespace std;
 using namespace zmqpp;
 using namespace sf;
+
+
+class data{
+public:
+	string name;
+	int n_parts;
+	data () {}
+	data (string x, int np) : name(x), n_parts(np) {}
+};
+
+typedef data data;
 
 #ifndef SAFE_QUEUE
 #define SAFE_QUEUE
@@ -65,36 +77,72 @@ private:
 };
 #endif
 
-void messageToFile(const message & msg, const string &fileName) {
+void messageToFile(const message & msg, const string &fileName, bool append) {
 	const void *data;
 	msg.get(&data, 1);
+
 	size_t size = msg.size(1);
 
-	ofstream ofs(fileName, ios::binary);
-	ofs.write((char *)data, size);
-	return;
+  if (append) {
+    ofstream ofs(fileName, ios::app);
+    ofs.write((char *)data, size);
+  }else {
+    ofstream ofs(fileName, ios::binary);
+    ofs.write((char *)data, size);
+  }
+  return;
 }
 
-void music_queue(Music &music, SafeQueue<string> &Q) {
+void music_queue(Music &music, SafeQueue<data> &Q) {
 	context ctx;
 	socket s(ctx, socket_type::req);
-	// cout << "Connecting to tcp port 5555\n";
 	s.connect("tcp://localhost:5555");
 
 	while (true) {
-		string songName = Q.dequeue(), state;
+		string  state, songName;
+		data song = Q.dequeue();
+		songName = song.name;
+		int cur_p = 0;
+
 		message m, answer;
-		m << "song";
-		m << songName;
+		m << "init_song";
+		m << songName << cur_p << song.n_parts;
+
 		s.send(m);
 		s.receive(answer);
 		answer >> state;
-		if (state == "file") {
-			messageToFile(answer, songName + ".ogg");
+
+		if (state == "init") {
+			messageToFile(answer, songName + ".ogg", cur_p);
 			music.openFromFile(songName + ".ogg");
 			music.play();
+			double ltime = music.getPlayingOffset().asSeconds();
 			cout << "playing: " << songName << endl;
-			while (music.getStatus() == SoundSource::Playing) {}
+			cur_p++;
+		  while (cur_p < song.n_parts &&
+						 music.getStatus() == SoundSource::Playing) {
+				sf::sleep(sf::milliseconds(1000));
+				double cur_time = music.getPlayingOffset().asSeconds();
+				if (cur_time - ltime >= 20.0) {
+					message mm, ans;
+					mm << "get_part";
+					mm << songName << cur_p << song.n_parts;
+					s.send(mm);
+					s.receive(ans);
+					ans >> state;
+					cout << "getting the part: " << cur_p << endl;
+					if (state == "chunk") {
+						messageToFile(ans, songName + ".ogg", cur_p > 0);
+						cur_p++;
+					} else {
+						cout << "Didn't get the part " << cur_p << endl;
+					}
+					ltime = cur_time;
+				}
+		  }
+			while (music.getStatus() == SoundSource::Playing) {
+				sf::sleep(sf::milliseconds(1000));
+			}
 		} else {
 			cout << "Didn't get a valid file" << endl;
 		}
@@ -102,11 +150,15 @@ void music_queue(Music &music, SafeQueue<string> &Q) {
 	}
 }
 
-void server_interaction(Music &music, SafeQueue<string> &Q) {
+void server_interaction(Music &music, SafeQueue<data> &Q) {
 	context ctx;
 	socket s(ctx, socket_type::req);
-	// cout << "Connecting to tcp port 5555\n";
+
 	s.connect("tcp://localhost:5555");
+	cout << "options :" << endl;
+	cout << "\tlist - get the songs list available on the server." << endl;
+	cout << "\tplay #songname - add the songname song to the playlist if it's available." << endl;
+	cout << "\tnext - play the next song in the queue if there is one." << endl;
 
 	while (true) {
 		message m, answer;
@@ -140,17 +192,19 @@ void server_interaction(Music &music, SafeQueue<string> &Q) {
 			}
 		} else if(result == "song") {
 			string newsong = song;
-			cout << "new song added " << newsong << endl;
-			Q.enqueue(newmusic);
+			int nparts; answer >> nparts;
+			cout << "new song added " << newsong << " #parts: " << nparts << endl;
+			Q.enqueue(data(newsong, nparts));
 		}else {
 			cout << "Don't know what to do :D" << endl;
 		}
 	}
 }
 
+
 int main(int argc, char** argv) {
 	Music music;
-	SafeQueue<string> Q;
+	SafeQueue<data> Q;
 
 	thread interact(&server_interaction, ref(music), ref(Q));
 	thread playlist(&music_queue, ref(music), ref(Q));
@@ -158,38 +212,3 @@ int main(int argc, char** argv) {
 	playlist.join();
 	return 0;
 }
-
-
-/*
-thread music play
-hay un problema con los while que validan las condiciones
-ya que gastan muchos recursos
-otro problema es la cola que es compartida en 2 hilos (
-	los dos hilos pueden modificar la cola!
-	race condition - semaforo
-
-	disenar cola segura para concurrencia
-		mutex = semaforo (investigar)
-		cola
-		variable de condicion = ?
-)
-while true
-	while p.empty
-	song = p.front
-	descargar song
-	music.load
-	music.play
-	while music.playing
-
-poller zmq?
-	poller p
-	p.add(s, poller::poll_in)
-	int stdinput = fileno(stdin)
-	p.add(stdinput, poller::poll_in)
-	while p.poll()
-		if p.has_input(s)
-			message m
-			s.receive(m)
-		if p.has_input(stdinput)
-			normal interaction
-*/
