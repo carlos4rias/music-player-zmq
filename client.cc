@@ -172,10 +172,12 @@ void server_interaction(Music &music, SafeQueue<data> &Q) {
 			cout << music.getStatus() << endl;
 			continue;
 		} else if (operation == "pause") {
-			music.pause();
+			if (music.getStatus() == SoundSource::Playing)
+				music.pause();
 			continue;
 		} else if (operation == "resume") {
-			music.play();
+			if (music.getStatus() == SoundSource::Paused)
+				music.play();
 			continue;
 		}
 
