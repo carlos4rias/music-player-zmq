@@ -33,6 +33,7 @@
 
 *.td
 play.cc
+dir.cc
 new.ogg
 client
 server
