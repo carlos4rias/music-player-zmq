@@ -119,8 +119,7 @@ void music_queue(Music &music, SafeQueue<data> &Q) {
 			double ltime = music.getPlayingOffset().asSeconds();
 			cout << "playing: " << songName << endl;
 			cur_p++;
-		  while (cur_p < song.n_parts &&
-						 music.getStatus() == SoundSource::Playing) {
+		  while (cur_p < song.n_parts && music.getStatus()) {
 				sf::sleep(sf::milliseconds(1000));
 				double cur_time = music.getPlayingOffset().asSeconds();
 				if (cur_time - ltime >= 20.0) {
@@ -140,7 +139,7 @@ void music_queue(Music &music, SafeQueue<data> &Q) {
 					ltime = cur_time;
 				}
 		  }
-			while (music.getStatus() == SoundSource::Playing) {
+			while (music.getStatus()) {
 				sf::sleep(sf::milliseconds(1000));
 			}
 		} else {
@@ -158,6 +157,8 @@ void server_interaction(Music &music, SafeQueue<data> &Q) {
 	cout << "options :" << endl;
 	cout << "\tlist - get the songs list available on the server." << endl;
 	cout << "\tplay #songname - add the songname song to the playlist if it's available." << endl;
+	cout << "\tpause - pause the current song." << endl;
+	cout << "\tresume - resume the current song" << endl;
 	cout << "\tnext - play the next song in the queue if there is one." << endl;
 
 	while (true) {
@@ -168,6 +169,13 @@ void server_interaction(Music &music, SafeQueue<data> &Q) {
 
 		if (operation == "next") {
 			music.stop();
+			cout << music.getStatus() << endl;
+			continue;
+		} else if (operation == "pause") {
+			music.pause();
+			continue;
+		} else if (operation == "resume") {
+			music.play();
 			continue;
 		}
 
