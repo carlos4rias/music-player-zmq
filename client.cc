@@ -93,10 +93,10 @@ void messageToFile(const message & msg, const string &fileName, bool append) {
   return;
 }
 
-void music_queue(Music &music, SafeQueue<data> &Q) {
+void music_queue(Music &music, SafeQueue<data> &Q, string ip) {
   context ctx;
   socket s(ctx, socket_type::req);
-  s.connect("tcp://localhost:5555");
+  s.connect("tcp://" + ip + ":5555");
 
   while (true) {
     string  state, songName;
@@ -149,11 +149,11 @@ void music_queue(Music &music, SafeQueue<data> &Q) {
   }
 }
 
-void server_interaction(Music &music, SafeQueue<data> &Q) {
+void server_interaction(Music &music, SafeQueue<data> &Q, string ip) {
   context ctx;
   socket s(ctx, socket_type::req);
 
-  s.connect("tcp://localhost:5555");
+  s.connect("tcp://" + ip + ":5555");
   cout << "options :" << endl;
   cout << "\tlist - get the songs list available on the server." << endl;
   cout << "\tplay #songname - add the songname song to the playlist if it's available." << endl;
@@ -213,11 +213,17 @@ void server_interaction(Music &music, SafeQueue<data> &Q) {
 
 
 int main(int argc, char** argv) {
+  if (argc < 2) {
+    cout << "Use $ " << argv[0] << " ip" << endl;
+    return 0;
+  }
+  string ip(argv[1]);
+
   Music music;
   SafeQueue<data> Q;
 
-  thread interact(&server_interaction, ref(music), ref(Q));
-  thread playlist(&music_queue, ref(music), ref(Q));
+  thread interact(&server_interaction, ref(music), ref(Q), ip);
+  thread playlist(&music_queue, ref(music), ref(Q), ip);
   interact.join();
   playlist.join();
   return 0;
