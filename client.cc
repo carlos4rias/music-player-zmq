@@ -93,8 +93,7 @@ void messageToFile(const message & msg, const string &fileName, bool append) {
   return;
 }
 
-void music_queue(Music &music, SafeQueue<data> &Q, string ip) {
-  context ctx;
+void music_queue(context &ctx, Music &music, SafeQueue<data> &Q, string ip) {
   socket s(ctx, socket_type::req);
   s.connect("tcp://" + ip + ":5555");
 
@@ -149,8 +148,8 @@ void music_queue(Music &music, SafeQueue<data> &Q, string ip) {
   }
 }
 
-void server_interaction(Music &music, SafeQueue<data> &Q, string ip) {
-  context ctx;
+void server_interaction(context &ctx, Music &music, SafeQueue<data> &Q, string ip) {
+
   socket s(ctx, socket_type::req);
 
   s.connect("tcp://" + ip + ":5555");
@@ -218,12 +217,12 @@ int main(int argc, char** argv) {
     return 0;
   }
   string ip(argv[1]);
-
+  context ctx;
   Music music;
   SafeQueue<data> Q;
 
-  thread interact(&server_interaction, ref(music), ref(Q), ip);
-  thread playlist(&music_queue, ref(music), ref(Q), ip);
+  thread interact(&server_interaction, ref(ctx), ref(music), ref(Q), ip);
+  thread playlist(&music_queue, ref(ctx), ref(music), ref(Q), ip);
   interact.join();
   playlist.join();
   return 0;
